@@ -43,7 +43,7 @@ export default {
 import { computed, type CSSProperties } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore } from '@/store'
-import type { PPTShapeElement } from '@/types/slides'
+import { type PPTShapeElement, ShapePathFormulasKeys } from '@/types/slides'
 import type { OperateResizeHandlers } from '@/types/edit'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import useCommonOperate from '../hooks/useCommonOperate'
@@ -67,6 +67,24 @@ const scaleHeight = computed(() => props.elementInfo.height * canvasScale.value)
 const { resizeHandlers, borderLines } = useCommonOperate(scaleWidth, scaleHeight)
 
 const keypoints = computed(() => {
+  if (props.elementInfo.pathFormula && props.elementInfo.pathFormula === ShapePathFormulasKeys.MESSAGE) {
+    if (!props.elementInfo.pathFormula 
+    || props.elementInfo.keypointInPosition === undefined 
+    || props.elementInfo.keypointInPercentage === undefined) return []
+
+    const width = props.elementInfo.width
+    const height = props.elementInfo.height
+
+    const [keypointWidthPercentage, keypointHeightPercentage] = props.elementInfo.keypointInPercentage
+    return [{
+      keypoint: null,
+      styles: {
+        left: width * canvasScale.value * keypointWidthPercentage + 'px',
+        top: height * canvasScale.value * keypointHeightPercentage + 'px'
+      }
+    }]
+  }
+
   if (!props.elementInfo.pathFormula || props.elementInfo.keypoints === undefined) return []
   const pathFormula = SHAPE_PATH_FORMULAS[props.elementInfo.pathFormula]
 

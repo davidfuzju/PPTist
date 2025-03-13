@@ -117,7 +117,7 @@ import { computed, ref, watch } from 'vue'
 import { round } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
-import type { PPTElement } from '@/types/slides'
+import { type PPTElement, type PPTShapeElement, ShapePathFormulasKeys } from '@/types/slides'
 import { ElementAlignCommands, ElementOrderCommands } from '@/types/edit'
 import { MIN_SIZE } from '@/configs/element'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
@@ -185,16 +185,52 @@ const updateTop = (value: number) => {
 
 // 设置元素宽度、高度、旋转角度
 // 对形状设置宽高时，需要检查是否需要更新形状路径
-const updateShapePathData = (width: number, height: number) => {
+const updateShapePathData = (w: number, h: number) => {
   if (handleElement.value && handleElement.value.type === 'shape' && 'pathFormula' in handleElement.value && handleElement.value.pathFormula) {
     const pathFormula = SHAPE_PATH_FORMULAS[handleElement.value.pathFormula]
+    const shapeElement = handleElement.value as PPTShapeElement
 
     let path = ''
-    if ('editable' in pathFormula && pathFormula.editable) path = pathFormula.formula(width, height, handleElement.value.keypoints!)
-    else path = pathFormula.formula(width, height)
+    if ('editable' in pathFormula && pathFormula.editable) {
+      
+      if (handleElement.value.pathFormula === ShapePathFormulasKeys.MESSAGE) {
+        
+        const leftValue = left.value
+        const topValue = top.value
+        const widthValue = width.value
+        const heightValue = height.value
+        const boxLeft = shapeElement.boxLeft ?? 0
+        const boxTop = shapeElement.boxTop ?? 0
+        let boxWidth = shapeElement.boxWidth ?? 1
+        let boxHeight = shapeElement.boxHeight ?? 1
+      
+        const deltaWidth = widthValue - w
+        const deltaHeight = heightValue - h
+
+        boxWidth = boxWidth - deltaWidth
+        boxHeight = boxHeight - deltaHeight
+
+        const [leftPercentage, topPercentage] = shapeElement.keypointInPercentage ?? [0, 0]
+        const result = pathFormula.formula2!(boxLeft, boxTop, boxWidth, boxHeight, leftValue + w * leftPercentage, topValue + h * topPercentage)
+        
+        if (result) {
+          const [svgPath, frame] = result
+          return {
+            left, top, w, h, boxLeft, boxTop, boxWidth, boxHeight,
+            viewBox: [w, h],
+            path: svgPath,
+            keypointsInPosition: [leftValue + w * leftPercentage, topValue + h * topPercentage]
+          }
+        }
+      }
+
+      path = pathFormula.formula(w, h, handleElement.value.keypoints!)
+    } else { 
+      path = pathFormula.formula(w, h)
+    }
 
     return {
-      viewBox: [width, height],
+      viewBox: [w, h],
       path,
     }
   }

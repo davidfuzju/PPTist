@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
-import type { PPTElement, PPTImageElement, PPTLineElement, PPTShapeElement } from '@/types/slides'
+import { type PPTElement, type PPTImageElement, type PPTLineElement, type PPTShapeElement, ShapePathFormulasKeys } from '@/types/slides'
 import { OperateResizeHandlers, type AlignmentLineProps, type MultiSelectRange } from '@/types/edit'
 import { MIN_SIZE } from '@/configs/element'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
@@ -118,6 +118,11 @@ export default (
     const elOriginWidth = element.width
     const elOriginHeight = element.height
 
+    const elOriginBoxLeft = ('boxLeft' in element && element.boxLeft) ? element.boxLeft : 0
+    const elOriginBoxTop = ('boxTop' in element && element.boxTop) ? element.boxTop : 0
+    const elOriginBoxWidth = ('boxWidth' in element && element.boxWidth) ? element.boxWidth : 0
+    const elOriginBoxHeight = ('boxHeight' in element && element.boxHeight) ? element.boxHeight : 0
+
     const originTableCellMinHeight = element.type === 'table' ? element.cellMinHeight : 0
     
     const elRotate = ('rotate' in element && element.rotate) ? element.rotate : 0
@@ -147,6 +152,11 @@ export default (
     let points: ReturnType<typeof getRotateElementPoints>
     let baseLeft = 0
     let baseTop = 0
+
+    let boxPoints: ReturnType<typeof getRotateElementPoints>
+    let baseBoxLeft = 0
+    let baseBoxTop = 0
+
     let horizontalLines: AlignLine[] = []
     let verticalLines: AlignLine[] = []
 
@@ -159,6 +169,17 @@ export default (
 
       baseLeft = oppositePoint.left
       baseTop = oppositePoint.top
+
+      const boxLeft = ('boxLeft' in element && element.boxLeft) ? element.boxLeft : 0
+      const boxTop = ('boxTop' in element && element.boxTop) ? element.boxTop : 0
+      const boxWidth = ('boxWidth' in element && element.boxWidth) ? element.boxWidth : 0
+      const boxHeight = ('boxHeight' in element && element.boxHeight) ? element.boxHeight : 0
+
+      boxPoints = getRotateElementPoints({ left: boxLeft, top: boxTop, width: boxWidth, height: boxHeight }, elRotate)
+      const oppositeBoxPoint = getOppositePoint(command, boxPoints)
+
+      baseBoxLeft = oppositeBoxPoint.left
+      baseBoxTop = oppositeBoxPoint.top
     }
 
     // 未旋转的元素具有缩放时的对齐吸附功能，在此处收集对齐对齐吸附线
@@ -260,6 +281,11 @@ export default (
       let height = elOriginHeight
       let left = elOriginLeft
       let top = elOriginTop
+
+      let boxWidth = elOriginBoxWidth
+      let boxHeight = elOriginBoxHeight
+      let boxLeft = elOriginBoxLeft
+      let boxTop = elOriginBoxTop
       
       // 元素被旋转的情况下，需要根据元素旋转的角度，重新计算需要缩放的距离（鼠标按下后移动的距离）
       if (elRotate) {
@@ -280,36 +306,54 @@ export default (
         if (command === OperateResizeHandlers.RIGHT_BOTTOM) {
           width = getSizeWithinRange(elOriginWidth + revisedX, 'width')
           height = getSizeWithinRange(elOriginHeight + revisedY, 'height')
+          boxWidth = getSizeWithinRange(elOriginBoxWidth + revisedX, 'width')
+          boxHeight = getSizeWithinRange(elOriginBoxHeight + revisedY, 'height')
         }
         else if (command === OperateResizeHandlers.LEFT_BOTTOM) {
           width = getSizeWithinRange(elOriginWidth - revisedX, 'width')
           height = getSizeWithinRange(elOriginHeight + revisedY, 'height')
           left = elOriginLeft - (width - elOriginWidth)
+          boxWidth = getSizeWithinRange(elOriginBoxWidth - revisedX, 'width')
+          boxHeight = getSizeWithinRange(elOriginBoxHeight + revisedY, 'height')
+          boxLeft = elOriginBoxLeft - (boxWidth - elOriginBoxWidth)
         }
         else if (command === OperateResizeHandlers.LEFT_TOP) {
           width = getSizeWithinRange(elOriginWidth - revisedX, 'width')
           height = getSizeWithinRange(elOriginHeight - revisedY, 'height')
           left = elOriginLeft - (width - elOriginWidth)
           top = elOriginTop - (height - elOriginHeight)
+          boxWidth = getSizeWithinRange(elOriginBoxWidth - revisedX, 'width')
+          boxHeight = getSizeWithinRange(elOriginBoxHeight - revisedY, 'height')
+          boxLeft = elOriginBoxLeft - (boxWidth - elOriginBoxWidth)
+          boxTop = elOriginBoxTop - (boxHeight - elOriginBoxHeight)
         }
         else if (command === OperateResizeHandlers.RIGHT_TOP) {
           width = getSizeWithinRange(elOriginWidth + revisedX, 'width')
           height = getSizeWithinRange(elOriginHeight - revisedY, 'height')
           top = elOriginTop - (height - elOriginHeight)
+          boxWidth = getSizeWithinRange(elOriginBoxWidth + revisedX, 'width')
+          boxHeight = getSizeWithinRange(elOriginBoxHeight - revisedY, 'height')
+          boxTop = elOriginBoxTop - (boxHeight - elOriginBoxHeight)
         }
         else if (command === OperateResizeHandlers.TOP) {
           height = getSizeWithinRange(elOriginHeight - revisedY, 'height')
           top = elOriginTop - (height - elOriginHeight)
+          boxHeight = getSizeWithinRange(elOriginBoxHeight - revisedY, 'height')
+          boxTop = elOriginBoxTop - (boxHeight - elOriginBoxHeight)
         }
         else if (command === OperateResizeHandlers.BOTTOM) {
           height = getSizeWithinRange(elOriginHeight + revisedY, 'height')
+          boxHeight = getSizeWithinRange(elOriginBoxHeight + revisedY, 'height')
         }
         else if (command === OperateResizeHandlers.LEFT) {
           width = getSizeWithinRange(elOriginWidth - revisedX, 'width')
           left = elOriginLeft - (width - elOriginWidth)
+          boxWidth = getSizeWithinRange(elOriginBoxWidth - revisedX, 'width')
+          boxLeft = elOriginBoxLeft - (boxWidth - elOriginBoxWidth)
         }
         else if (command === OperateResizeHandlers.RIGHT) {
           width = getSizeWithinRange(elOriginWidth + revisedX, 'width')
+          boxWidth = getSizeWithinRange(elOriginBoxWidth + revisedX, 'width')
         }
 
         // 获取当前元素的基点坐标，与初始状态时的基点坐标进行对比，并计算差值进行元素位置的校正
@@ -323,6 +367,17 @@ export default (
 
         left = left - offsetX
         top = top - offsetY
+
+        const currentBoxPoints = getRotateElementPoints({ width: boxWidth, height: boxHeight, left: boxLeft, top: boxTop }, elRotate)
+        const currentOppositeBoxPoint = getOppositePoint(command, currentBoxPoints)
+        const currentBaseBoxLeft = currentOppositeBoxPoint.left
+        const currentBaseBoxTop = currentOppositeBoxPoint.top
+
+        const offsetBoxX = currentBaseBoxLeft - baseBoxLeft
+        const offsetBoxY = currentBaseBoxTop - baseBoxTop
+
+        boxLeft = boxLeft - offsetBoxX
+        boxTop = boxTop - offsetBoxY
       }
 
       // 元素未被旋转的情况下，正常计算新的位置大小即可，无需复杂的校正等工作
@@ -332,91 +387,208 @@ export default (
         let moveX = x / canvasScale.value
         let moveY = y / canvasScale.value
 
+        let moveBoxX = moveX
+        let moveBoxY = moveY
+
         if (fixedRatio) {
           if (command === OperateResizeHandlers.RIGHT_BOTTOM || command === OperateResizeHandlers.LEFT_TOP) moveY = moveX / aspectRatio
           if (command === OperateResizeHandlers.LEFT_BOTTOM || command === OperateResizeHandlers.RIGHT_TOP) moveY = -moveX / aspectRatio
+
+          if (command === OperateResizeHandlers.RIGHT_BOTTOM || command === OperateResizeHandlers.LEFT_TOP) moveBoxY = moveBoxX / aspectRatio
+          if (command === OperateResizeHandlers.LEFT_BOTTOM || command === OperateResizeHandlers.RIGHT_TOP) moveBoxY = -moveBoxX / aspectRatio
         }
 
         if (command === OperateResizeHandlers.RIGHT_BOTTOM) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, elOriginTop + elOriginHeight + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = moveY * aspectRatio
-            else moveY = moveX / aspectRatio
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, elOriginTop + elOriginHeight + moveY)
+            moveX = moveX - offsetX
+            moveY = moveY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveX = moveY * aspectRatio
+              else moveY = moveX / aspectRatio
+            }
+            width = getSizeWithinRange(elOriginWidth + moveX, 'width')
+            height = getSizeWithinRange(elOriginHeight + moveY, 'height')
           }
-          width = getSizeWithinRange(elOriginWidth + moveX, 'width')
-          height = getSizeWithinRange(elOriginHeight + moveY, 'height')
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginBoxLeft + elOriginBoxWidth + moveBoxX, elOriginBoxTop + elOriginBoxHeight + moveBoxY)
+            moveBoxX = moveBoxX - offsetX
+            moveBoxY = moveBoxY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveBoxX = moveBoxY * aspectRatio
+              else moveBoxY = moveBoxX / aspectRatio
+            }
+
+            boxWidth = getSizeWithinRange(elOriginBoxWidth + moveBoxX, 'width')
+            boxHeight = getSizeWithinRange(elOriginBoxHeight + moveBoxY, 'height')
+          }
         }
         else if (command === OperateResizeHandlers.LEFT_BOTTOM) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + moveX, elOriginTop + elOriginHeight + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = -moveY * aspectRatio
-            else moveY = -moveX / aspectRatio
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + moveX, elOriginTop + elOriginHeight + moveY)
+            moveX = moveX - offsetX
+            moveY = moveY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveX = -moveY * aspectRatio
+              else moveY = -moveX / aspectRatio
+            }
+            width = getSizeWithinRange(elOriginWidth - moveX, 'width')
+            height = getSizeWithinRange(elOriginHeight + moveY, 'height')
+            left = elOriginLeft - (width - elOriginWidth)
           }
-          width = getSizeWithinRange(elOriginWidth - moveX, 'width')
-          height = getSizeWithinRange(elOriginHeight + moveY, 'height')
-          left = elOriginLeft - (width - elOriginWidth)
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginBoxLeft + moveBoxX, elOriginBoxTop + elOriginBoxHeight + moveBoxY)
+            moveBoxX = moveBoxX - offsetX
+            moveBoxY = moveBoxY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveBoxX = -moveBoxY * aspectRatio
+              else moveBoxY = -moveBoxX / aspectRatio
+            }
+            boxWidth = getSizeWithinRange(elOriginBoxWidth - moveBoxX, 'width')
+            boxHeight = getSizeWithinRange(elOriginBoxHeight + moveBoxY, 'height')
+            boxLeft = elOriginBoxLeft - (boxWidth - elOriginBoxWidth)
+          }
         }
         else if (command === OperateResizeHandlers.LEFT_TOP) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + moveX, elOriginTop + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = moveY * aspectRatio
-            else moveY = moveX / aspectRatio
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + moveX, elOriginTop + moveY)
+            moveX = moveX - offsetX
+            moveY = moveY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveX = moveY * aspectRatio
+              else moveY = moveX / aspectRatio
+            }
+            width = getSizeWithinRange(elOriginWidth - moveX, 'width')
+            height = getSizeWithinRange(elOriginHeight - moveY, 'height')
+            left = elOriginLeft - (width - elOriginWidth)
+            top = elOriginTop - (height - elOriginHeight)
           }
-          width = getSizeWithinRange(elOriginWidth - moveX, 'width')
-          height = getSizeWithinRange(elOriginHeight - moveY, 'height')
-          left = elOriginLeft - (width - elOriginWidth)
-          top = elOriginTop - (height - elOriginHeight)
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginBoxLeft + moveBoxX, elOriginBoxTop + moveBoxY)
+            moveBoxX = moveBoxX - offsetX
+            moveBoxY = moveBoxY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveBoxX = moveBoxY * aspectRatio
+              else moveBoxY = moveBoxX / aspectRatio
+            }
+            boxWidth = getSizeWithinRange(elOriginBoxWidth - moveBoxX, 'width')
+            boxHeight = getSizeWithinRange(elOriginBoxHeight - moveBoxY, 'height')
+            boxLeft = elOriginBoxLeft - (boxWidth - elOriginBoxWidth)
+            boxTop = elOriginBoxTop - (boxHeight - elOriginBoxHeight)
+          }
         }
         else if (command === OperateResizeHandlers.RIGHT_TOP) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, elOriginTop + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = -moveY * aspectRatio
-            else moveY = -moveX / aspectRatio
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, elOriginTop + moveY)
+            moveX = moveX - offsetX
+            moveY = moveY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveX = -moveY * aspectRatio
+              else moveY = -moveX / aspectRatio
+            }
+            width = getSizeWithinRange(elOriginWidth + moveX, 'width')
+            height = getSizeWithinRange(elOriginHeight - moveY, 'height')
+            top = elOriginTop - (height - elOriginHeight)
           }
-          width = getSizeWithinRange(elOriginWidth + moveX, 'width')
-          height = getSizeWithinRange(elOriginHeight - moveY, 'height')
-          top = elOriginTop - (height - elOriginHeight)
+          {
+            const { offsetX, offsetY } = alignedAdsorption(elOriginBoxLeft + elOriginBoxWidth + moveBoxX, elOriginBoxTop + moveBoxY)
+            moveBoxX = moveBoxX - offsetX
+            moveBoxY = moveBoxY - offsetY
+            if (fixedRatio) {
+              if (offsetY) moveBoxX = -moveBoxY * aspectRatio
+              else moveBoxY = -moveBoxX / aspectRatio
+            }
+            boxWidth = getSizeWithinRange(elOriginBoxWidth + moveBoxX, 'width')
+            boxHeight = getSizeWithinRange(elOriginBoxHeight - moveBoxY, 'height')
+            boxTop = elOriginBoxTop - (boxHeight - elOriginBoxHeight)
+          }
         }
         else if (command === OperateResizeHandlers.LEFT) {
-          const { offsetX } = alignedAdsorption(elOriginLeft + moveX, null)
-          moveX = moveX - offsetX
-          width = getSizeWithinRange(elOriginWidth - moveX, 'width')
-          left = elOriginLeft - (width - elOriginWidth)
+          {
+            const { offsetX } = alignedAdsorption(elOriginLeft + moveX, null)
+            moveX = moveX - offsetX
+            width = getSizeWithinRange(elOriginWidth - moveX, 'width')
+            left = elOriginLeft - (width - elOriginWidth)
+          }
+          {
+            const { offsetX } = alignedAdsorption(elOriginBoxLeft + moveBoxX, null)
+            moveBoxX = moveBoxX - offsetX
+            boxWidth = getSizeWithinRange(elOriginBoxWidth - moveBoxX, 'width')
+            boxLeft = elOriginBoxLeft - (boxWidth - elOriginBoxWidth)
+          }
         }
         else if (command === OperateResizeHandlers.RIGHT) {
-          const { offsetX } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, null)
-          moveX = moveX - offsetX
-          width = getSizeWithinRange(elOriginWidth + moveX, 'width')
+          {
+            const { offsetX } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, null)
+            moveX = moveX - offsetX
+            width = getSizeWithinRange(elOriginWidth + moveX, 'width')
+          }
+          {
+            const { offsetX } = alignedAdsorption(elOriginBoxLeft + elOriginBoxWidth + moveBoxX, null)
+            moveBoxX = moveBoxX - offsetX
+            boxWidth = getSizeWithinRange(elOriginBoxWidth + moveBoxX, 'width')
+          }
         }
         else if (command === OperateResizeHandlers.TOP) {
-          const { offsetY } = alignedAdsorption(null, elOriginTop + moveY)
-          moveY = moveY - offsetY
-          height = getSizeWithinRange(elOriginHeight - moveY, 'height')
-          top = elOriginTop - (height - elOriginHeight)
+          {
+            const { offsetY } = alignedAdsorption(null, elOriginTop + moveY)
+            moveY = moveY - offsetY
+            height = getSizeWithinRange(elOriginHeight - moveY, 'height')
+            top = elOriginTop - (height - elOriginHeight)
+          }
+          {
+            const { offsetY } = alignedAdsorption(null, elOriginBoxTop + moveBoxY)
+            moveBoxY = moveBoxY - offsetY
+            boxHeight = getSizeWithinRange(elOriginBoxHeight - moveBoxY, 'height')
+            boxTop = elOriginBoxTop - (boxHeight - elOriginBoxHeight)
+          }
         }
         else if (command === OperateResizeHandlers.BOTTOM) {
-          const { offsetY } = alignedAdsorption(null, elOriginTop + elOriginHeight + moveY)
-          moveY = moveY - offsetY
-          height = getSizeWithinRange(elOriginHeight + moveY, 'height')
+          {
+            const { offsetY } = alignedAdsorption(null, elOriginTop + elOriginHeight + moveY)
+            moveY = moveY - offsetY
+            height = getSizeWithinRange(elOriginHeight + moveY, 'height')
+          }
+          {
+            const { offsetY } = alignedAdsorption(null, elOriginBoxTop + elOriginBoxHeight + moveBoxY)
+            moveBoxY = moveBoxY - offsetY
+            boxHeight = getSizeWithinRange(elOriginBoxHeight + moveBoxY, 'height')
+          }
         }
       }
-      
+
       elementList.value = elementList.value.map(el => {
         if (element.id !== el.id) return el
         if (el.type === 'shape' && 'pathFormula' in el && el.pathFormula) {
           const pathFormula = SHAPE_PATH_FORMULAS[el.pathFormula]
 
           let path = ''
-          if ('editable' in pathFormula) path = pathFormula.formula(width, height, el.keypoints!)
-          else path = pathFormula.formula(width, height)
+          if ('editable' in pathFormula) {
+            if (el.pathFormula === ShapePathFormulasKeys.MESSAGE) {
+              const keypointInPercentage = ('keypointInPercentage' in el && el.keypointInPercentage) ? el.keypointInPercentage : pathFormula.defaultKeypointValue!
+              const [keypointWidthPercentage, keypointHeightPercentage] = keypointInPercentage
+              const result = pathFormula.formula2!(boxLeft, boxTop, boxWidth, boxHeight, left + width * keypointWidthPercentage, top + height * keypointHeightPercentage)
+
+              if (result) {
+                const [svgPath, frame] = result
+                return {
+                  ...el, left, top, width, height, boxLeft, boxTop, boxWidth, boxHeight,
+                  viewBox: [width, height],
+                  path: svgPath,
+                  keypointsInPosition: [width * keypointWidthPercentage, height * keypointHeightPercentage]
+                }
+              }
+
+              return {
+                ...el, left, top, width, height, boxLeft, boxTop, boxWidth, boxHeight,
+                viewBox: [width, height],
+              }
+            }
+
+            path = pathFormula.formula(width, height, el.keypoints!)
+          } else {
+            path = pathFormula.formula(width, height)
+          }
 
           return {
             ...el, left, top, width, height,

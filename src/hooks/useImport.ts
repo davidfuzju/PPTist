@@ -337,8 +337,29 @@ export default () => {
     
                     const pathFormula = SHAPE_PATH_FORMULAS[shape.pathFormula]
                     if ('editable' in pathFormula && pathFormula.editable) {
-                      element.path = pathFormula.formula(el.width, el.height, pathFormula.defaultValue)
-                      element.keypoints = pathFormula.defaultValue
+                      if (el.shapType === 'wedgeRectCallout') {
+                        const left = el.left
+                        const top = el.top
+                        const width = el.width
+                        const height = el.height
+
+                        const [widthPercentage, heightPercentage] = pathFormula.defaultBoxValue!
+                        const [keypointWidthPercentage, keypointHeightPercentage] = pathFormula.defaultKeypointValue!
+                        const result = pathFormula.formula2!(left, top, width * widthPercentage, height * heightPercentage, left + width * keypointWidthPercentage, top + height * keypointHeightPercentage)
+                        if (result) {
+                          const [svgPath, frame] = result
+                          element.path = svgPath
+                          element.boxLeft = left
+                          element.boxTop = top
+                          element.boxWidth = width
+                          element.boxHeight = height * heightPercentage
+                          element.keypointInPosition = [width * keypointWidthPercentage, height * keypointHeightPercentage]
+                          element.keypointInPercentage = [width * keypointWidthPercentage / frame.width, height * keypointHeightPercentage / frame.height]
+                        }
+                      } else {
+                        element.path = pathFormula.formula(el.width, el.height, pathFormula.defaultValue)
+                        element.keypoints = pathFormula.defaultValue
+                      }
                     }
                     else element.path = pathFormula.formula(el.width, el.height)
                   }

@@ -2,7 +2,7 @@ import { storeToRefs } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
 import { getImageSize } from '@/utils/image'
-import type { PPTLineElement, PPTElement, TableCell, TableCellStyle, PPTShapeElement, ChartType } from '@/types/slides'
+import { type PPTLineElement, type PPTElement, type TableCell, type TableCellStyle, type PPTShapeElement, type ChartType, ShapePathFormulasKeys } from '@/types/slides'
 import { type ShapePoolItem, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import type { LinePoolItem } from '@/configs/lines'
 import { CHART_DEFAULT_DATA } from '@/configs/chart'
@@ -215,10 +215,27 @@ export default () => {
 
       const pathFormula = SHAPE_PATH_FORMULAS[data.pathFormula]
       if ('editable' in pathFormula && pathFormula.editable) {
-        newElement.path = pathFormula.formula(width, height, pathFormula.defaultValue!)
-        newElement.keypoints = pathFormula.defaultValue
+        if (data.pathFormula === ShapePathFormulasKeys.MESSAGE) {
+          const [widthPercentage, heightPercentage] = pathFormula.defaultBoxValue!
+          const [keypointWidthPercentage, keypointHeightPercentage] = pathFormula.defaultKeypointValue!
+          const result = pathFormula.formula2!(left, top, width * widthPercentage, height * heightPercentage, left + width * keypointWidthPercentage, top + height * keypointHeightPercentage)
+          if (result) {
+            const [svgPath, frame] = result
+            newElement.path = svgPath
+            newElement.boxLeft = left
+            newElement.boxTop = top
+            newElement.boxWidth = width
+            newElement.boxHeight = height * heightPercentage
+            newElement.keypointInPosition = [width * keypointWidthPercentage, height * keypointHeightPercentage]
+            newElement.keypointInPercentage = [width * keypointWidthPercentage / frame.width, height * keypointHeightPercentage / frame.height]
+          }
+        } else {
+          newElement.path = pathFormula.formula(width, height, pathFormula.defaultValue!)
+          newElement.keypoints = pathFormula.defaultValue
+        }
+      } else { 
+        newElement.path = pathFormula.formula(width, height) 
       }
-      else newElement.path = pathFormula.formula(width, height)
     }
     createElement(newElement)
   }

@@ -184,7 +184,7 @@ const { dragLineElement } = useDragLineElement(elementList)
 const { selectElement } = useSelectAndMoveElement(elementList, dragElement)
 const { scaleElement, scaleMultiElement } = useScaleElement(elementList, alignmentLines, canvasScale)
 const { rotateElement } = useRotateElement(elementList, viewportRef, canvasScale)
-const { moveShapeKeypoint } = useMoveShapeKeypoint(elementList, canvasScale)
+const { moveShapeKeypoint } = useMoveShapeKeypoint(elementList, viewportRef, canvasScale)
 
 const { selectAllElements } = useSelectElement()
 const { deleteAllElements } = useDeleteElement()

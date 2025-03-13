@@ -129,7 +129,7 @@
 import { type Ref, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
-import type { GradientType, PPTShapeElement, Gradient, ShapeText } from '@/types/slides'
+import { type GradientType, type PPTShapeElement, type Gradient, type ShapeText, ShapePathFormulasKeys } from '@/types/slides'
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useShapeFormatPainter from '@/hooks/useShapeFormatPainter'
@@ -228,7 +228,8 @@ const updateFill = (value: string) => {
 
 // 修改形状
 const changeShape = (shape: ShapePoolItem) => {
-  const { width, height } = handleElement.value as PPTShapeElement
+  const shapeElement = handleElement.value as PPTShapeElement
+  const { left, top, width, height } = shapeElement
   const props: Partial<PPTShapeElement> = {
     viewBox: shape.viewBox,
     path: shape.path,
@@ -240,8 +241,24 @@ const changeShape = (shape: ShapePoolItem) => {
 
     const pathFormula = SHAPE_PATH_FORMULAS[shape.pathFormula]
     if ('editable' in pathFormula) {
-      props.path = pathFormula.formula(width, height, pathFormula.defaultValue)
-      props.keypoints = pathFormula.defaultValue
+      if (shape.pathFormula === ShapePathFormulasKeys.MESSAGE) {
+        const [widthPercentage, heightPercentage] = pathFormula.defaultBoxValue!
+        const [keypointWidthPercentage, keypointHeightPercentage] = pathFormula.defaultKeypointValue!
+        const result = pathFormula.formula2!(left, top, width * widthPercentage, height * heightPercentage, left + width * keypointWidthPercentage, top + height * keypointHeightPercentage)
+        if (result) {
+          const [svgPath, frame] = result
+          props.path = svgPath
+          props.boxLeft = left
+          props.boxTop = top
+          props.boxWidth = width
+          props.boxHeight = height * heightPercentage
+          props.keypointInPosition = [width * keypointWidthPercentage, height * keypointHeightPercentage]
+          props.keypointInPercentage = [width * keypointWidthPercentage / frame.width, height * keypointHeightPercentage / frame.height]
+        }
+      } else {
+        props.path = pathFormula.formula(width, height, pathFormula.defaultValue)
+        props.keypoints = pathFormula.defaultValue
+      }
     }
     else props.path = pathFormula.formula(width, height)
   }

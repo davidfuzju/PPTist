@@ -61,7 +61,9 @@
           </g>
         </svg>
 
-        <div class="shape-text" :class="[text.align, { 'editable': editable || text.content }]">
+        <div class="shape-text" 
+        :class="[text.align, { 'editable': editable || text.content }]" 
+        :style="shapeTextStyle">
           <ProsemirrorEditor
             ref="prosemirrorEditorRef"
             v-if="editable || text.content"
@@ -84,7 +86,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
-import type { PPTShapeElement, ShapeText } from '@/types/slides'
+import { ShapePathFormulasKeys, type PPTShapeElement, type ShapeText } from '@/types/slides'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
 import useElementOutline from '@/views/components/element/hooks/useElementOutline'
 import useElementShadow from '@/views/components/element/hooks/useElementShadow'
@@ -137,6 +139,29 @@ const flipV = computed(() => props.elementInfo.flipV)
 const { flipStyle } = useElementFlip(flipH, flipV)
 
 const editable = ref(false)
+
+// davidfu: 针对 shape 为 message 调整文本的相对位置
+const shapeTextStyle = computed(() => {
+  const { pathFormula } = props.elementInfo
+  if (pathFormula === ShapePathFormulasKeys.MESSAGE) {
+    const { left, top, width, height } = props.elementInfo
+    let { boxLeft, boxTop, boxWidth, boxHeight } = props.elementInfo
+
+    boxLeft = boxLeft ?? 0
+    boxTop = boxTop ?? 0
+    boxWidth = boxWidth ?? 0
+    boxHeight = boxHeight ?? 0
+
+    return {
+      left: `${boxLeft - left}px`,
+      top: `${boxTop - top}px`,
+      right: `${-((boxLeft + boxWidth) - (left + width))}px`,
+      bottom: `${-((boxTop + boxHeight) - (top + height))}px`,
+    }
+  }
+
+  return null
+})
 
 watch(handleElementId, () => {
   if (handleElementId.value !== props.elementInfo.id) {

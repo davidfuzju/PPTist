@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 import { useSlidesStore } from '@/store'
-import type { PPTElement, PPTShapeElement } from '@/types/slides'
+import { ShapePathFormulasKeys, type PPTElement, type PPTShapeElement } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 
@@ -14,6 +14,7 @@ interface ShapePathData {
 
 export default (
   elementList: Ref<PPTElement[]>,
+  viewportRef: Ref<HTMLElement | undefined>,
   canvasScale: Ref<number>,
 ) => {
   const slidesStore = useSlidesStore()
@@ -34,28 +35,66 @@ export default (
     const pathFormula = SHAPE_PATH_FORMULAS[element.pathFormula!]
     let shapePathData: ShapePathData | null = null
     if ('editable' in pathFormula && pathFormula.editable) {
-      const getBaseSize = pathFormula.getBaseSize![index]
-      const range = pathFormula.range![index]
-      const relative = pathFormula.relative![index]
-      const keypoint = originKeypoints[index]
+      if (element.pathFormula === ShapePathFormulasKeys.MESSAGE) {
+        shapePathData = { baseSize: 0, originPos: 0, min: 0, max: 0, relative: '' }
+      } else {
+        const getBaseSize = pathFormula.getBaseSize![index]
+        const range = pathFormula.range![index]
+        const relative = pathFormula.relative![index]
+        const keypoint = originKeypoints[index]
 
-      const baseSize = getBaseSize(element.width, element.height)
-      const originPos = baseSize * keypoint
-      const [min, max] = range
+        const baseSize = getBaseSize(element.width, element.height)
+        const originPos = baseSize * keypoint
+        const [min, max] = range
 
-      shapePathData = { baseSize, originPos, min, max, relative }
+        shapePathData = { baseSize, originPos, min, max, relative }
+      }
     }
+
+    if (!viewportRef.value) return
+    const viewportRect = viewportRef.value.getBoundingClientRect()
 
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
 
       const currentPageX = e instanceof MouseEvent ? e.pageX : e.changedTouches[0].pageX
       const currentPageY = e instanceof MouseEvent ? e.pageY : e.changedTouches[0].pageY
+      const mouseX = (currentPageX - viewportRect.left) / canvasScale.value
+      const mouseY = (currentPageY - viewportRect.top) / canvasScale.value
       const moveX = (currentPageX - startPageX) / canvasScale.value
       const moveY = (currentPageY - startPageY) / canvasScale.value
 
       elementList.value = elementList.value.map(el => {
         if (el.id === element.id && shapePathData) {
+          if ('pathFormula' in el && el.pathFormula === ShapePathFormulasKeys.MESSAGE) {
+            const shapeElement = el as PPTShapeElement
+            const boxLeft = shapeElement.boxLeft ?? 0
+            const boxTop = shapeElement.boxTop ?? 0
+            const boxWidth = shapeElement.boxWidth ?? 0
+            const boxHeight = shapeElement.boxHeight ?? 0
+            const result = pathFormula.formula2!(boxLeft, boxTop, boxWidth, boxHeight, mouseX, mouseY)
+
+            if (result) {
+              const [svgPath, frame] = result
+
+              el.left = frame.x
+              el.top = frame.y
+              el.width = frame.width
+              el.height = frame.height
+              el.keypointInPosition = [mouseX - frame.x, mouseY - frame.y]
+              el.keypointInPercentage = [(mouseX - frame.x) / frame.width, (mouseY - frame.y) / frame.height]
+              // 通过设置 viewBox 的值和当前的 frame 的 [width, height] 相同以避免被缩放
+              el.viewBox = [frame.width, frame.height]
+          
+              return {
+                ...el,
+                path: svgPath
+              }
+            }
+
+            return el
+          }
+
           const { baseSize, originPos, min, max, relative } = shapePathData
           const shapeElement = el as PPTShapeElement
 
@@ -87,6 +126,7 @@ export default (
             path: pathFormula.formula(shapeElement.width, shapeElement.height, keypoints),
           }
         }
+
         return el
       })
     }

@@ -39,6 +39,9 @@ export default (
     const elOriginHeight = ('height' in element && element.height) ? element.height : 0
     const elOriginRotate = ('rotate' in element && element.rotate) ? element.rotate : 0
   
+    const elOriginBoxLeft = ('boxLeft' in element && element.boxLeft) ? element.boxLeft : 0
+    const elOriginBoxTop = ('boxTop' in element && element.boxTop) ? element.boxTop : 0
+
     const startPageX = isTouchEvent ? e.changedTouches[0].pageX : e.pageX
     const startPageY = isTouchEvent ? e.changedTouches[0].pageY : e.pageY
 
@@ -258,11 +261,23 @@ export default (
         }
       }
       alignmentLines.value = _alignmentLines
+
+      const targetBoxLeft = elOriginBoxLeft + (targetLeft - elOriginLeft)
+      const targetBoxTop = elOriginBoxTop + (targetTop - elOriginTop)
       
       // 单选状态下，或者当前选中的多个元素中存在正在操作的元素时，仅修改正在操作的元素的位置
       if (activeElementIdList.value.length === 1 || isActiveGroupElement) {
         elementList.value = elementList.value.map(el => {
-          return el.id === element.id ? { ...el, left: targetLeft, top: targetTop } : el
+          if (el.id === element.id) {
+            return { 
+              ...el, 
+              left: targetLeft,
+              top: targetTop,
+              boxLeft: targetBoxLeft,
+              boxTop: targetBoxTop,
+            }
+          }
+          return el
         })
       }
 
@@ -279,12 +294,20 @@ export default (
                 ...el,
                 left: targetLeft,
                 top: targetTop,
+                boxLeft: targetBoxLeft,
+                boxTop: targetBoxTop,
               }
             }
+
+            const elBoxLeft = ('boxLeft' in el && el.boxLeft) ? el.boxLeft : 0
+            const elBoxTop = ('boxTop' in el && el.boxTop) ? el.boxTop : 0
+
             return {
               ...el,
               left: el.left + (targetLeft - handleElement.left),
               top: el.top + (targetTop - handleElement.top),
+              boxLeft: elBoxLeft + (targetBoxLeft - handleElement.left),
+              boxTop: elBoxTop + (targetBoxTop - handleElement.top),
             }
           }
           return el

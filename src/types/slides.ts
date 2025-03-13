@@ -346,6 +346,18 @@ export interface ShapeText {
  * 但也有一些形状希望能更精确的控制一些关键点的位置，此时就需要提供路径计算公式，通过在缩放时更新 viewBox 并重新计算 path 来重新绘制形状
  * 
  * keypoints?: 关键点位置百分比
+ * 
+ * keypointInPosition?: shape 为 message 时，关键点相对位置（[x, y]）
+ * 
+ * keypointInPercentage?: shape 为 message 时，关键点相对位置百分比 ([x, y])
+ * 
+ * boxLeft?: shape 为 message 时, box 左侧位置，在 canvas 坐标系中(绝对位置)
+ * 
+ * boxTop?: shape 为 message 时, box 顶部位置，在 canvas 坐标系中(绝对位置)
+ * 
+ * boxWidth?: shape 为 message, box 的宽度
+ * 
+ * boxheight?: shape 为 message, box 的高度
  */
 export interface PPTShapeElement extends PPTBaseElement {
   type: 'shape'
@@ -363,6 +375,12 @@ export interface PPTShapeElement extends PPTBaseElement {
   text?: ShapeText
   pathFormula?: ShapePathFormulasKeys
   keypoints?: number[]
+  keypointInPosition?: [number, number]
+  keypointInPercentage?: [number, number]
+  boxLeft?: number
+  boxTop?: number  
+  boxWidth?: number
+  boxHeight?: number
 }
 
 

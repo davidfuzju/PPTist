@@ -27,6 +27,10 @@ export interface ShapePathFormula {
   relative?: string[]
   getBaseSize?: ((width: number, height: number) => number)[]
   formula: (width: number, height: number, values?: number[]) => string
+
+  defaultBoxValue?: number[]
+  defaultKeypointValue?: number[]
+  formula2?: (x: number, y: number, width: number, height: number, keyPointX: number, keyPointY: number) => [string, { x: number, y: number, width: number, height: number }] | null
 }
 
 export const SHAPE_PATH_FORMULAS: {
@@ -122,18 +126,145 @@ export const SHAPE_PATH_FORMULAS: {
   },
   [ShapePathFormulasKeys.MESSAGE]: {
     editable: true,
-    range: [[0, 0.8], [0.1, 0.3]],
-    defaultValue: [0.3, 0.2],
-    relative: ['left_bottom', 'bottom'],
+    defaultBoxValue: [1, 0.8],
+    defaultKeypointValue: [0.2, 1],
     getBaseSize: [
       width => width,
       (width, height) => height,
     ],
-    formula: (width, height, values) => {
-      const point = width * values![0]
-      const arrowWidth = width * 0.2
-      const arrowheight = height * values![1]
-      return `M 0 0 L ${width} 0 L ${width} ${height - arrowheight} L ${point + arrowWidth} ${height - arrowheight} L ${point} ${height} L ${point} ${height - arrowheight} L 0 ${height - arrowheight} Z`
+    /**
+     * 
+     * @param x 矩形 A 的其实 x，在 canvas 坐标系中
+     * @param y 矩形 A 相起始 y，在 canvas 坐标系中
+     * @param width 矩形 A 的宽度
+     * @param height 矩形 B 的高度
+     * @param keyPointX 关键点 x，在 canvas 坐标系中
+     * @param keyPointY 关键点 y，在 canvas 坐标系中
+     * @returns 
+     */
+    formula: (width, height, values) => { return '' },
+    formula2: (
+      x: number, y: number, width: number, height: number,
+      keyPointX: number, keyPointY: number
+    ): [string, { x: number, y: number, width: number, height: number }] | null => {
+      // **rectA 的固定位置**
+      const rectA = { x, y, width, height }
+      const centerA = { x: rectA.x + rectA.width / 2, y: rectA.y + rectA.height / 2 }
+      const keyPointB = { x: keyPointX, y: keyPointY } // 可移动的关键点
+
+      // **检测 keyPoint 是否在 A 内部**
+      if (
+        keyPointB.x >= rectA.x &&
+        keyPointB.x <= rectA.x + rectA.width &&
+        keyPointB.y >= rectA.y &&
+        keyPointB.y <= rectA.y + rectA.height
+      ) {
+        console.log(`${keyPointB.x}, ${keyPointB.y} 在 ${rectA.x}, ${rectA.y} - ${rectA.x + rectA.width}, ${rectA.y + rectA.height} 内部，跳过箭头计算`)
+        return null
+      }
+
+      // **计算 keyPointB 到 rectA 的夹角**
+      const distance = Math.hypot(centerA.x - keyPointB.x, centerA.y - keyPointB.y)
+      const minAngle = (4 * Math.PI) / 180
+      const maxAngle = (8 * Math.PI) / 180
+      const minDistance = width * 0.3
+      const maxDistance = width * 2.0
+      const normalizedDistance = Math.min(1, Math.max(0, (distance - minDistance) / (maxDistance - minDistance)))
+      const angleRad = minAngle + (maxAngle - minAngle) * (1 - normalizedDistance)
+
+      const theta0 = Math.atan2(centerA.y - keyPointB.y, centerA.x - keyPointB.x)
+      const thetaLeft = theta0 - angleRad
+      const thetaRight = theta0 + angleRad
+
+      // **计算射线和 rectA 相交的两个点**
+      function getIntersectionPoint(theta: number) {
+        const tanTheta = Math.tan(theta)
+        const candidates = []
+
+        // **检测四条边的交点**
+        const edges = [
+          { x1: rectA.x, y1: rectA.y, x2: rectA.x + rectA.width, y2: rectA.y }, // Top
+          { x1: rectA.x, y1: rectA.y + rectA.height, x2: rectA.x + rectA.width, y2: rectA.y + rectA.height }, // Bottom
+          { x1: rectA.x, y1: rectA.y, x2: rectA.x, y2: rectA.y + rectA.height }, // Left
+          { x1: rectA.x + rectA.width, y1: rectA.y, x2: rectA.x + rectA.width, y2: rectA.y + rectA.height } // Right
+        ]
+
+        for (const edge of edges) {
+          const { x1, y1, x2, y2 } = edge
+          if (x1 === x2) {
+            // 竖直边
+            const y = keyPointB.y + tanTheta * (x1 - keyPointB.x)
+            if (y >= Math.min(y1, y2) && y <= Math.max(y1, y2)) {
+              candidates.push({ x: x1, y })
+            }
+          } else {
+            // 水平边
+            const x = keyPointB.x + (y1 - keyPointB.y) / tanTheta
+            if (x >= Math.min(x1, x2) && x <= Math.max(x1, x2)) {
+              candidates.push({ x, y: y1 })
+            }
+          }
+        }
+
+        // 选择最接近 keyPointB 的交点
+        return candidates.sort((a, b) =>
+          Math.hypot(a.x - keyPointB.x, a.y - keyPointB.y) - Math.hypot(b.x - keyPointB.x, b.y - keyPointB.y)
+        )[0]
+      }
+
+      // **计算两个交点**
+      const intersect1 = getIntersectionPoint(thetaLeft)
+      const intersect2 = getIntersectionPoint(thetaRight)
+
+      if (!intersect1 || !intersect2) {
+        console.log("未找到两个交点，跳过计算")
+        return null
+      }
+
+      // **计算 keyPointB 方向**
+      let direction = ""
+      if (keyPointB.y < rectA.y) direction = "top"
+      else if (keyPointB.y > rectA.y + rectA.height) direction = "bottom"
+      if (keyPointB.x < rectA.x) direction += "-left"
+      else if (keyPointB.x > rectA.x + rectA.width) direction += "-right"
+
+      // **计算 frame**
+      const minX = Math.min(rectA.x, intersect1.x, intersect2.x, keyPointB.x)
+      const minY = Math.min(rectA.y, intersect1.y, intersect2.y, keyPointB.y)
+      const maxX = Math.max(rectA.x + rectA.width, intersect1.x, intersect2.x, keyPointB.x)
+      const maxY = Math.max(rectA.y + rectA.height, intersect1.y, intersect2.y, keyPointB.y)
+      const frame = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+
+      const rectALeftTop = { x: rectA.x, y: rectA.y }
+      const rectARightTop = { x: rectA.x + rectA.width, y: rectA.y }
+      const rectARightBottom = { x: rectA.x + rectA.width, y: rectA.y + rectA.height }
+      const rectALeftBottom = { x: rectA.x, y: rectA.y + rectA.height }
+
+      let pathPoints: { x: number, y: number }[] = []
+
+      if (intersect1.y === rectA.y && intersect2.x === rectA.x) { // **左上**
+        pathPoints = [keyPointB, intersect2, rectALeftBottom, rectARightBottom, rectARightTop, intersect1, keyPointB]
+      } else if (intersect1.y === rectA.y && intersect2.y === rectA.y) { // **上**
+        pathPoints = [keyPointB, intersect2, rectALeftTop, rectALeftBottom, rectARightBottom, rectARightTop, intersect1, keyPointB]
+      } else if (intersect1.x === rectA.x + rectA.width && intersect2.y === rectA.y) { // **右上**
+        pathPoints = [keyPointB, intersect1, rectARightBottom, rectALeftBottom, rectALeftTop, intersect2, keyPointB]
+      } else if (intersect1.x === rectA.x + rectA.width && intersect2.x === rectA.x + rectA.width) { // **右**
+        pathPoints = [keyPointB, intersect1, rectARightBottom, rectALeftBottom, rectALeftTop, rectARightTop, intersect2, keyPointB]
+      } else if (intersect1.y === rectA.y + rectA.height && intersect2.x === rectA.x + rectA.width ) { // **右下**
+        pathPoints = [keyPointB, intersect1, rectALeftBottom, rectALeftTop, rectARightTop, rectARightBottom, intersect2, keyPointB]
+      } else if (intersect1.y === rectA.y + rectA.height && intersect2.y === rectA.y + rectA.height) { // **下**
+        pathPoints = [keyPointB, intersect1, rectALeftBottom, rectALeftTop, rectARightTop, rectARightBottom, intersect2, keyPointB]
+      } else if (intersect1.x === rectA.x && intersect2.y === rectA.y + rectA.height) { // **左下**
+        pathPoints = [keyPointB, intersect1, rectALeftTop, rectARightTop, rectARightBottom, intersect2, keyPointB]
+      } else if (intersect1.x === rectA.x && intersect2.x === rectA.x) { // **左**
+        pathPoints = [keyPointB, intersect1, rectALeftTop, rectARightTop, rectARightBottom, rectALeftBottom, intersect2, keyPointB]
+      } else { // **特殊情况**
+      }
+
+      // **生成 SVG Path**
+      const svgPath = pathPoints.map(p => `L ${p.x - frame.x},${p.y - frame.y}`).join(" ").replace(/^L/, "M") + " Z"
+      console.log("路径绘制完毕!!!")
+      return [svgPath, frame]
     }
   },
   [ShapePathFormulasKeys.ROUND_MESSAGE]: {
